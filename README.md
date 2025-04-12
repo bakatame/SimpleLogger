@@ -19,7 +19,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     
     LOG_DEBUG("中文");
 
-	LOGF_DEBUG("this is Debug Level %d", 233);
+    LOGF_DEBUG("this is Debug Level %d", 233);
     
     // 测试日志
     while (true) {
