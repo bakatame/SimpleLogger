@@ -255,7 +255,8 @@ namespace Logger
 		/**
 		* @brief 写入控制台
 		*
-		* @param wszFilePath 完整绝对路径
+		* @param szText 输出文本
+		* @param wColor 输出颜色
 		* @return 返回文件名
 		*/
 		inline void WriteColorText(const LOG_STRING_TYPE& szText, WORD wColor = ELogColor::LOG_COLOR_DEFAULT)
@@ -266,6 +267,58 @@ namespace Logger
 			::WriteConsole(hConsole, szText.c_str(), 
 				static_cast<DWORD>(szText.length()), 
 				nullptr, nullptr);
+		}
+
+		/**
+		* @brief 宽字符转UTF-8字符串
+		*
+		* @param wszText 需要转的字符串
+		* @param nCode 源文本编码号
+		* @return 返回文件名
+		*/
+		std::string WideToUTF8(const std::wstring& wszText, UINT nCode = CP_UTF8)
+		{
+			if (wszText.empty()) return std::string();
+
+			int size_needed = WideCharToMultiByte(nCode, 0, wszText.data(), (int)wszText.size(), nullptr, 0, nullptr, nullptr);
+			std::string utf8str(size_needed, 0);
+			WideCharToMultiByte(nCode, 0, wszText.data(), (int)wszText.size(), &utf8str[0], size_needed, nullptr, nullptr);
+			return utf8str;
+		}
+
+		/**
+		* @brief UTF-8转宽字符
+		*
+		* @param szText 需要转的字符串
+		* @param nCode 源文本编码号
+		* @return 返回文件名
+		*/
+		std::wstring UTF8ToWide(const std::string& szText, UINT nCode = CP_UTF8)
+		{
+			if (szText.empty()) return std::wstring();
+
+			int size_needed = MultiByteToWideChar(nCode, 0, szText.data(), (int)szText.size(), nullptr, 0);
+			std::wstring wstr(size_needed, 0);
+			MultiByteToWideChar(nCode, 0, szText.data(), (int)szText.size(), &wstr[0], size_needed);
+			return wstr;
+		}
+
+		/**
+		* @brief 字符串转UTF-8
+		*
+		* @param szText 需要转的字符串
+		* @param nCode 源文本编码号
+		* @return 返回文件名
+		*/
+		std::string StrToUTF8(const std::string& szText, UINT nCode = 936) 
+		{
+			std::wstring wszWideStr = UTF8ToWide(szText, 936);
+			std::string szUtf8Str = WideToUTF8(wszWideStr);
+
+			// 移除结尾的null字符
+			if (!szUtf8Str.empty() && szUtf8Str.back() == '\0') szUtf8Str.pop_back();
+
+			return szUtf8Str;
 		}
 	}
 
@@ -323,7 +376,7 @@ namespace Logger
 				utils::WriteColorText(szContent);
 				// 写入重复计数
 				utils::WriteColorText(
-					LOG_STRING(" [x") + LOG_TOSTRING(stLastEntry.nCount++) + LOG_STRING("]\n"),
+					LOG_STRING(" [x") + LOG_TOSTRING(++stLastEntry.nCount) + LOG_STRING("]\n"),
 					ELogColor::LOG_COLOR_COUNT);
 			}
 			else
@@ -404,23 +457,31 @@ namespace Logger
 				// 打开新文件
 				fsLogFile.open(stConfig.szFilePath, LOG_IOS::out);
 			}
-			
+
 			// 检查是否是重复消息
 			if (szContent == stLastFileEntry.szContent)
 			{
 				// 移动光标到上一行
 				fsLogFile.seekp(stLastFileEntry.posLast);
 				// 写入文件
-				fsLogFile << szFullMessage << LOG_STRING(" [x") << stLastFileEntry.nCount++ << LOG_STRING("]\n");
+#ifdef LOG_UNICODE
+				fsLogFile << utils::WideToUTF8(szFullMessage).c_str() << LOG_STRING(" [x") << ++stLastFileEntry.nCount << LOG_STRING("]\n");
+#else
+				fsLogFile << utils::StrToUTF8(szFullMessage) << LOG_STRING(" [x") << ++stLastFileEntry.nCount << LOG_STRING("]\n");
+#endif
 			}
 			else
 			{
-				// 写入文件
-				fsLogFile << szFullMessage << LOG_STRING("\n");
 				// 更新 LastFileEntry 信息
 				stLastFileEntry.nCount = 1;
 				stLastFileEntry.posLast = fsLogFile.tellp();
 				stLastFileEntry.szContent = szContent;
+				// 写入文件
+#ifdef LOG_UNICODE
+				fsLogFile << utils::WideToUTF8(szFullMessage).c_str() << LOG_STRING("\n");
+#else
+				fsLogFile << utils::StrToUTF8(szFullMessage) << LOG_STRING("\n");
+#endif
 			}
 
 			// 刷新文件
